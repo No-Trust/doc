@@ -9,7 +9,7 @@
 
 
 %opening
-\title{Peerster - NoTrust\newline
+\title{Peerster - NoTrust\\
 Team NoTrust}
 \author{Raja Soufi, Pierre Thevenet}
 
@@ -23,16 +23,19 @@ The goal of our project is to extend Peerster's file sharing to include a reputa
 
 \section{Goals and Functionalities}
 
-\subsection{Authenticity and Integrity in File Sharing}
-One of the goal is to add a way to verify the origin of a file. That is if a peer A receives a file from origin B, A can verify if the true origin is indeed A. If it is, then it can accept the file, and if not, decide to discard the file and decrease the reputation of the sender (see // TODO). \newline
+\subsection{Authenticity, Integrity, Confidentiality and Web-of-Trust}
+
+\subsubsection{Authenticity and Integrity in File Sharing}
+\label{sec:goals-funcs-auth-integrity}
+One of the goal is to add a way to verify the origin of a file. That is if a peer A receives a file from origin B, A can verify if the true origin is indeed A. If it is, then it can accept the file, and if not, decide to discard the file and decrease the reputation of the sender (see \ref{sec:sig-based-rep}). \newline
 
 In the user's perspective, the received files will only be origin validated files, so the user does not need to think if the file received has been modified from someone else than the origin. The verification process is not visible.
 Integrity will be implemented with authenticity.
 
-\subsection{Confidentiality}
+\subsubsection{Confidentiality}
 In the user's perspective, this will allow the possibility to send encrypted files and messages to a (single) known destination. Because the peerster network is open to eavesdroppers, this will offer confidentiality in one-to-one communication.
 
-\subsection{Decentralized Key Sharing, Web of Trust}
+\subsubsection{Decentralized Key Sharing, Web of Trust}
 The previous functionalities are implemented using public key cryptography. Usually the public keys are shared using a centralized PKI (Public Key Infrastructure), but our project will avoid this and implement a decentralized way to distribute public keys, based on the PGP "Web of Trust" model \cite{abdul1997pgp}.
 
 Once the public keys are obtained, the previous functionalities (CIA) are straightforward, therefore this is one of the main goals of our project, with the reputation system.
@@ -45,8 +48,31 @@ This enables all benefits from having public keys (e.g. authenticity, confidenti
 
 In the user's perspective, this way of sharing public keys will not be visible, for the sake of simplicity. However we can imagine an extension in which the trust put in the obtained public keys also depends on the user decision, for example while receiving a suspicious message, the user can decide to distrust the public key associated with the origin of the message.
 
-\subsection{Reputation and Web of Trust}
-// TODO ?
+\subsection{Reputation}
+The goal of having a reputation system in our implementation of Peerster is to improve the efficiency and security of the network.
+Every peer A will compute a reputation for every other peer B based on three things:
+
+\begin{itemize}
+\item A's interactions with B
+\item The communicated reputation of B from other peers, weighted by those other peers' reputations relative to A
+\item The respective difference between the reputations of other peers communicated by B and those previously computed by A
+\end{itemize}
+
+Two types of reputation are computed for each peer. These are described below.
+
+\subsubsection{Signature-Based Reputation}
+\label{sec:sig-based-rep}
+Every time A receives signed data originating from C delivered by B (note that B and C might be the same peer), A can check if the data delivered by B actually comes from C by means of Public Key Cryptography (as seen in \ref{sec:goals-funcs-auth-integrity}).
+\\\\
+If the data turns out to be authentic, then A will increase B's reputation, otherwise A will decrease it.
+The amount by which A modifies B's reputation depends on the confidence level of C's public key that A holds, i.e. the degree to which we are confident that the public key we think is that of C is indeed that of C (see \ref{sec:related-work-wot}).
+
+\subsubsection{Contribution-Based Reputation}
+This type of reputation represents how much data B has delivered to A, relative to the total amount of data exchanged between the two.
+Yet, more importance will be given to more recent interactions, as we will see in more detail in \ref{sec:background}.
+\\\\
+For this, A will recompute this type of reputation after every interaction with B based on the history of data flow between them.
+This means that in a situation where both peers send data to each other in equal amounts, each of them will have a maximal reputation for the other, whereas in a situation where A sends much more data to B than the other way around, B will have a high reputation for A and A will have a low reputation for B.
 
 \section{Related Work}
 
@@ -59,13 +85,14 @@ Decentralized PKIs already exist, and the main goal for them is to redistribute 
 Implementing this in Peerster does not seem necessary, since every peer eventually save the entire set of active peers in the network (due to the specification). Our approach is to collect and save public keys for peers for each peerster client (total decentralization). Therefore this solution will save time for public key lookup, at the cost of storage.
 
 \subsection{Web of Trust}
+\label{sec:related-work-wot}
 The PGP Web of Trust Model \cite{abdul1997pgp} is a way to collect public keys using a social network, usually done in real life. For example, B signs the key of C, and gives the key to A, if A trusts B (which defines B as an "introducer"), A can trust that the given key indeed belong to C, and A can then signs the key of C. 
 
 In Peerster we would want it to be automated, which is not the case in the common PGP model. 
 
 One of the key point of the model is the notion of trustworthiness of certificates and introducers. The trust of a certificate or introducer is decided by the user for each case, in Peerster we want it to be done automatically using the reputation and length of the certificate chain named "key ring" (see Fig. \ref{fig:pgp-key-ring}).
 
-In the PGP model the level of trust is discrete (e.g. 'marginal', 'complete', 'untrustworthy' ...) but the meaning of this levels are not explicit and left for interpretation. We will therefore extend this model with a level of trust representing a 'probability' of confidence in the association key-peer. This idea is described described in \cite{haenni2007new}, which is a natural extension to the PGP model and seems reasonable.
+In the PGP model the level of trust is discrete (e.g. 'marginal', 'complete', 'untrustworthy' ...) but the meaning of this levels are not explicit and left for interpretation. We will therefore extend this model with a level of trust representing a 'probability' of confidence in the association key-peer. This idea is described in \cite{haenni2007new}, which is a natural extension to the PGP model and seems reasonable.
 A bad aspect for this idea is the need for a threshold for discarding keys with a trust level too low.
 
 \begin{figure}[h]
@@ -80,11 +107,13 @@ Each figure associated with vertex Z  correspond to the trust level given in the
 \end{figure}
 
 \section{Background}
+\label{sec:background}
 
 \subsection{Cryptography}
-Since our project will be written in go, we will use standard cryptographic libraries for go.  We will use RSA \cite{RFC8017}.
+Since our project will be written in go, we will use standard cryptographic libraries for go. We will use RSA \cite{RFC8017}.
 
 \subsection{Web of Trust}
+\label{sec:web-of-trust-spec}
 We will implement the idea of \cite{haenni2007new}.
 
 \subsubsection{Algorithm}
