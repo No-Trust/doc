@@ -4,6 +4,7 @@
 \usepackage{hyperref}
 \usepackage[a4paper, total={6in, 10in}]{geometry}
 \usepackage{graphicx}
+\usepackage{amsmath}
 \graphicspath{ {images/} }
 
 
@@ -49,6 +50,7 @@ This enables all benefits from having public keys (e.g. authenticity, confidenti
 In the user's perspective, this way of sharing public keys will not be visible, for the sake of simplicity. However we can imagine an extension in which the trust put in the obtained public keys also depends on the user decision, for example while receiving a suspicious message, the user can decide to distrust the public key associated with the origin of the message.
 
 \subsection{Reputation}
+\label{sec:goals-funcs-rep}
 The goal of having a reputation system in our implementation of Peerster is to improve the efficiency and security of the network.
 Every peer A will compute a reputation for every other peer B based on three things:
 
@@ -73,6 +75,14 @@ Yet, more importance will be given to more recent interactions, as we will see i
 \\\\
 For this, A will recompute this type of reputation after every interaction with B based on the history of data flow between them.
 This means that in a situation where both peers send data to each other in equal amounts, each of them will have a maximal reputation for the other, whereas in a situation where A sends much more data to B than the other way around, B will have a high reputation for A and A will have a low reputation for B.
+
+\subsubsection{Usage}
+Having reputations of other peers will mainly serve two purposes.
+The first is related to choosing a confidence value for a public key association (see \ref{sec:design-arch-interop-rs-wts}).
+The second, which affects more directly a peer's interaction with other peer's, is for choosing which peers to communicate with:
+A peer with a high reputation is one that we know (at least recently) has sends us authentic data regularly, and so it makes sense to prefer it over less reputable peer.
+That is after all the main purpose of having a reputations system.
+Other peers however may still be selected with low probabilities in order to "give other peers a chance" to increase their reputation and become more active.
 
 \section{Related Work}
 
@@ -111,10 +121,18 @@ Each figure associated with a vertex Z  correspond to the trust level given in t
 
 \subsection{Reputation}
 This is also a common problem, and different variations of a common approach have been studied in order to manage reputation in a distributed system while minimizing the possibilities for malicious peers to abuse the reputation system in order to gain reputation and do malicious activity.
+\\\\
+For instance, \cite{gupta2003reputation} computes a global reputation for each peer, which uses local reputation values assigned to it by other peers, weighted by those peers' global reputations.
+\cite{despotovic2006p2p} takes a similar approach but computes a trustworthiness of a node by doing a weighted average of the experiences of the nodes that interacted with that node.
+Another interesting approach is that of \cite{zhou2007powertrust}, in which each node is rated with a global reputation score which is based on weighted local scores from neighbors.
+\\\\
+Our implementation will follow a similar approach, but will be slightly simpler for the sake of this project:
+Each peer A computes a local reputation for every other peer B, as we saw in \ref{sec:goals-funcs-rep}.
+Yet, from time to time A will ask its $n$ most reputable peers for their reputation tables, and will use the reputations in those tables, wheighted by the reputations of those $n$ peers, to update its reputation table.
+Furthermore, when it receives the reputation tables of its $n$ most reputable peers, A will compute some sort of Hamming distance between each peer's table and its own table and use that distance to update that peer's reputation.
 \\
-For instance, \ref{gupta2003reputation} computes a global reputation for each peer, which uses local reputation values assigned to it by other peers, weighted by those peers' global reputations.
-\ref{despotovic2006p2p} takes a similar approach but computes a trustworthiness of a node by doing a weighted average of the experiences of the nodes that interacted with that node.
-Another interesting approach is that of \ref{zhou2007powertrust}, in which each node is rated with a global reputation
+However, when updating peers' reputation values with either of these two methods, the highest weight will still be given to the previous value we are updating.
+This way, values introduced by peers will only introduce small variations to the reputations in A's table, which will still be mostly controlled by A's own interactions with other peers.
 
 \section{Background}
 \label{sec:background}
@@ -152,6 +170,42 @@ The 'probabilities' assigned to each peers are computed using the reputation sys
 \subsubsection{Start}
 At first, a peer needs trusted peers to start collecting keys, this peers will be called "first introducers". They need to be given at startup, along with their public key (to effectively trust them).
 
+\subsection{Reputation}
+\label{sec:rep-spec}
+Most of the techniques used for this part have a rather mathematical aspect to them than algorithmical.
+
+\subsubsection{Signature-Based Reputation}
+For this type of reputation, we will use a simple formula with a nice property:
+
+\begin{equation}
+    RS_n = 
+    \begin{cases}
+        RS_{n-1} + f_+(c),       & \text{if the received data is authentic}
+        \\
+        \frac{RS_{n-1}}{f_-(c)}, & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+Where $RS_n$ is the signature-based reputation of peer B that sent the data at some point n, $c$ is the confidence level of B's public key association, and $f_+(c)$ and $f_-(c)$ are functions of $c$ that are used to control the impact of this new interaction on B's reputation based on the confidence level $c$.
+These can be chosen later on, but the important idea here is that behaving non-maliciously will only increase a peer's reputation linearly, while behaving maliciously will decrease it exponentially.
+This somehow makes it a lot harder for malicious peers to do a significant amount of malicious activity while still interacting in the system with a good reputation.
+
+\subsubsection{Contribution-Based Reputation}
+For this type of reputation, we will use an Exponentially Weighted Moving Average:
+
+\begin{equation}
+    RC_n =
+    \begin{cases}
+        RC_initial,                                     & \text{if}\ n = 1
+        \\
+        \alpha \cdot S + (1 - \alpha) \cdot RC_{n - 1}, & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+Where $RC_n$ is the contribution-based reputation of peer B that sent/received data at some point n, $RC_initial$ is an initial contribution-based reputation constant that is assigned to all peers at the beginning, $\alpha$ is the main parameter of the Moving Average, and $S$ is $1$ if B was the sender during this interaction and $0$ if it was the receiver.
+\\\\
+Note that the value of $\alpha$ determines how much weight we give to the current interaction and to the history of interaction.
+
 \section{Design and Architecture}
 
 Our project is built on the common Peerster, adding to it our modules. In particular the transfer of messages (broadcast and private) and file sharing are the most important features our system will use.
@@ -180,18 +234,32 @@ Periodically the system will update the confidence levels in the table by runnin
 Problems may arise, like collision of two different keys for the same peer (same identifier), in this case the system will accept the key with the highest confidence level.
 
 \subsubsection{Reputation System}
+This system will be responsible for updating a separate table in the Main System which will include $(id, RS_n, RC_n)$ where $RS_n$ and $RC_n$ are the signature-based and contribution-based reputations respectively, as we saw in \ref{sec:rep-spec}.
+This table will be used both to choose peers to interact with as well as to compute confidence levels in the Web of Trust System.
+\\\\
+Given that the very definition of reputation relies on history, all peers will have the same initial reputation, which seems like the most natural state to start the system with.
+Then, as we saw earlier, the two reputation values (in each entry of the table) will be updated on every interaction with the corresponding peer, as well as periodically when peers ask their most reputable peers for their tables.
+\\
+Obviously, we might get completely invalid reputation values from a peer (e.g. outside the set bounds), in which case we might consider penalizing that peer even more.
 
 \subsubsection{Main System}
 The main system will be implemented with base the common Peerster project. \\
 We will add features like confidentiality, integrity and authenticity to the messages and files, in this main module. The difference in the messages will be set by some flags, which will indicate if the message is an encrypted file or has a signature. Then the messages can be demultiplexed according to this flags.
 
-TODO Reputation = choosing the best peer for download etc
+As discussed earlier, the reputation table will be used to choose a peer to interact with, for example when a peer wants to ask for the public key of another peer, or when it wants to send a status packet to update its rumors.
+\\
+Highly reputable peers will be chosen with a very hight probablity. For instance, assuming the table is sorted somehow based on the reputation values, we might select a peer from the upper half of the table with probability $0.9$ and from the lower half with probability $0.1$, and recursively select a half with probabilities that are more and more balanced with every iteration.
+This will occasionally give low reputable peers a chance to make a "come back" and contribute in the system.
 
 \subsection{Systems interoperability}
 
 \subsubsection{Use of WTS for RS}
+The output of the Web-of-Trust system will be used when updating the signature-based reputations of peers (hence the name).
+The confidence level for each public key association is a perfect variable to be used as a liability measure:
+If we're not completely sure that the public key we have for a peer is indeed his public key, it wouldn't be completely fair to penalize him as much as if we were 100\% sure of his public key.
 
 \subsubsection{Use of RS for WTS}
+\label{sec:design-arch-interop-rs-wts}
 The reputation system will be helpful for determining the probabilities as discussed in \ref{sec:parameters}, by providing the signature-based reputation (see \ref{sec:sig-based-rep}). This reputation gives information about the honesty of a peer : if this peer sent badly signed packets or not. Therefore we will assign the confidence level of each peer in function of its reputation.
 
 \subsubsection{Use of WTS for the cryptographic functionalities}
@@ -205,6 +273,9 @@ We will verify correctness of the cryptographic functionnalities (confidentialit
 
 \subsection{Web of Trust}
 To measure the correctness and performance of our key distribution system (WTS), we will create a scenario with a network of Peerster nodes, and follow the updates of the key ring of each node, checking the time at which the ring stops updating, and checking the correctness of the ring. The state of the WTS system is the key ring, therefore checking the key ring is enough to evaluate the correctness of the system. The performance will be tested, but because of the nature of Peerster and the possibility of network bottlenecks, we will check that the key ring is complete after a reasonable amount of time. Moreover since the public keys are obtained via this system, testing in \ref{sec:crypt-test} will effectively test if the WTS works.
+
+\subsection{Reputation}
+
 
 \bibliography{references}{}
 \bibliographystyle{plain}
