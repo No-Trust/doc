@@ -225,6 +225,9 @@ Figure \ref{fig:no-trust-arch} illustrates the overall structure of the system a
 	\label{fig:no-trust-arch}
 \end{figure}
 
+\noindent
+Pierre will do the Web of Trust System, and Raja will do the Reputation system.
+
 \subsubsection{Web of Trust System}
 This system will be responsible for updating a table in the Main System which will include $(id, k^{pub}_{id}, confidence_{id})$ for each known peer with identifier $id$, where $k^{pub}_{id}$ is the (trusted) public key of this peer, and $confidence_{id}$ is the confidence level put in the association $id \leftrightarrow k^{pub}_{id}$. \\
 This table will be used for getting the public keys of the different peers, and the confidence value will be used for the Reputation System. \\
