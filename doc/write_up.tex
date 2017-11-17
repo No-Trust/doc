@@ -11,7 +11,7 @@
 
 %opening
 \title{Peerster - NoTrust\\
-Team NoTrust}
+\large Team NoTrust}
 \author{Raja Soufi, Pierre Thevenet}
 
 \begin{document}
@@ -178,6 +178,7 @@ Most of the techniques used for this part have a rather mathematical aspect to t
 For this type of reputation, we will use a simple formula with a nice property:
 
 \begin{equation}
+    \label{eq:sig-rep}
     RS_n = 
     \begin{cases}
         RS_{n-1} + f_+(c),       & \text{if the received data is authentic}
@@ -186,6 +187,7 @@ For this type of reputation, we will use a simple formula with a nice property:
     \end{cases}
 \end{equation}
 
+\noindent
 Where $RS_n$ is the signature-based reputation of peer B that sent the data at some point n, $c$ is the confidence level of B's public key association, and $f_+(c)$ and $f_-(c)$ are functions of $c$ that are used to control the impact of this new interaction on B's reputation based on the confidence level $c$.
 These can be chosen later on, but the important idea here is that behaving non-maliciously will only increase a peer's reputation linearly, while behaving maliciously will decrease it exponentially.
 This somehow makes it a lot harder for malicious peers to do a significant amount of malicious activity while still interacting in the system with a good reputation.
@@ -194,6 +196,7 @@ This somehow makes it a lot harder for malicious peers to do a significant amoun
 For this type of reputation, we will use an Exponentially Weighted Moving Average:
 
 \begin{equation}
+    \label{eq:contr-rep}
     RC_n =
     \begin{cases}
         RC_initial,                                     & \text{if}\ n = 1
@@ -202,6 +205,7 @@ For this type of reputation, we will use an Exponentially Weighted Moving Averag
     \end{cases}
 \end{equation}
 
+\noindent
 Where $RC_n$ is the contribution-based reputation of peer B that sent/received data at some point n, $RC_initial$ is an initial contribution-based reputation constant that is assigned to all peers at the beginning, $\alpha$ is the main parameter of the Moving Average, and $S$ is $1$ if B was the sender during this interaction and $0$ if it was the receiver.
 \\\\
 Note that the value of $\alpha$ determines how much weight we give to the current interaction and to the history of interaction.
@@ -275,7 +279,12 @@ We will verify correctness of the cryptographic functionnalities (confidentialit
 To measure the correctness and performance of our key distribution system (WTS), we will create a scenario with a network of Peerster nodes, and follow the updates of the key ring of each node, checking the time at which the ring stops updating, and checking the correctness of the ring. The state of the WTS system is the key ring, therefore checking the key ring is enough to evaluate the correctness of the system. The performance will be tested, but because of the nature of Peerster and the possibility of network bottlenecks, we will check that the key ring is complete after a reasonable amount of time. Moreover since the public keys are obtained via this system, testing in \ref{sec:crypt-test} will effectively test if the WTS works.
 
 \subsection{Reputation}
-
+To evaluate the reputation system, we will follow a similar approach as for the rest of the system.
+We will run the system in a controlled environment where we send particular specific messages that we know should trigger certain changes in the reputation tables in order to check that these changes are actually happening.
+\\\\
+We will check for example that signature-based reputations are being decreased exponentially when receiving inauthentic data and increased linearly otherwise (as described by equation \ref{eq:sig-rep}).
+We will also check that the moving average for contribution-based reputation discards history more and more over time (as described by equation \ref{eq:contr-rep}).
+Finally, we will make sure that a peer chooses in most cases its most reputable peers before initiating interactions such as rumor mongering.
 
 \bibliography{references}{}
 \bibliographystyle{plain}
