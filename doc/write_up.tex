@@ -26,34 +26,37 @@ The goal of our project is to extend Peerster's file sharing to include a reputa
 \section{Goals and Functionalities}
 
 
-\subsection{Authenticity, Integrity, Confidentiality and Web-of-Trust}
+\subsection{Authenticity, Integrity, Confidentiality and Web-of-Trust (Pierre)}
 
-\subsubsection{Verifying the origin of a file - Pierre}
+\subsubsection{Verifying the origin of a file}
 \label{sec:goals-funcs-auth-integrity}
 One of the goal is to add a way to verify the origin of a file. That is if a peer A receives a file created by C from the uploader B, A can verify if the true origin is indeed C. If it is, then it can accept the file, and if not, decide to discard the file and decrease the reputation of the uploader B (see \ref{sec:sig-based-rep}).
 
 When requesting a download, the user will have to specify the origin of the file. Then the program will download it from the uploader (the destination of the file request) and if the uploader sends a correct file, it will accept it, otherwise drop it. \\
 
-In the mean time, any file transfer in the network between a downloader A and uploader B will be signed by B so that A can verify that there is no man-in-the-middle. In fact the downloader does not necessarily expect that it comes effectively from B, but when our system will update the reputation of B according to its upload to A, A will need to verify if the file is true to what B sent. 
+In the mean time, any file transfer in the network between a downloader A and uploader B will be signed by B so that A can verify that there is no man-in-the-middle. In fact the downloader does not necessarily expect that it comes effectively from B, but when our system will update the reputation of B according to its upload, hence A will need to verify if the file is true to what B sent. 
 
-\subsubsection{Confidentiality with Private Messages - Pierre}
-In the user's perspective, this will allow the possibility to send encrypted private messages to a (single) known destination. Because the peerster network is open to eavesdroppers, this will offer confidentiality of the content of a message in one-to-one communication. Similarly to a PGP encrypted email, only the content of the message will be encrypted.
+\subsubsection{Confidentiality with Private Messages}
+Another goal is to improve Private Messages to be encrypted.
 
-\subsubsection{Automated Web of Trust (AWOT) - Pierre} 
+In the user's perspective, this will allow the possibility to send encrypted private messages to a (single) known destination. Because the peerster network is open to eavesdroppers, this will offer confidentiality on the content of a message in one-to-one communication. Similarly to a PGP encrypted email, only the content of the message will be encrypted.
+
+This will be transparent to the user, all private messages will be limited to peers that obtained the public keys.
+
+\subsubsection{Automated Web of Trust (AWOT)} 
 The previous functionalities are implemented using public key cryptography. Usually the public keys are shared using a centralized PKI (Public Key Infrastructure), but our project will avoid this and implement a decentralized way to distribute public keys, based on the PGP "Web of Trust" model \cite{abdul1997pgp}.
 
 Once the public keys are obtained, the previous functionalities (CIA) are straightforward, therefore our project is focused on the Automated Web of Trust rather than the possibilities offered by it, as they only serve as proofs of our working system.
 
-Our system will build a table of relation between peers and public key, and assign a trust level to each relation, representing the confidence that a particular public key belongs to a certain peer.
+Our system will build a table of relation between peers and public keys, and assign a trust level to each relation, representing the confidence that a particular public key belongs to a certain peer.
 
 In summary our project also consist in a solution to the key validation and distribution problem. 
 
-This enables all benefits from having public keys (e.g. authenticity, confidentiality...), while not relying on trusting a common authority. \\
+This enables all benefits from having public keys (e.g. authenticity, confidentiality...), while not relying on trusting a common authority. Hence we think it fits well in Peerster. \\
 
-The user of our system will have to bootstrap the program with trusted public keys he knows from other users of Peerster, this will be the only action performed by the user. The keyring will then automatically update itself and present a visualization.
+The user of our system will have to bootstrap the program with trusted public keys he knows from other users of Peerster, this will be the only action performed by the user in order to obtain public keys. The keyring will then automatically update itself and present a visualization.
 
-We can imagine an extension in which the trust put in a particular peer depends on the user decision (think how a close friend can be more trustworthy than others).
-
+We can imagine an extension in which the trust put in a particular peer depends on the user decision.
 
 \begin{figure}[h]
 	\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{keyring_example1}
@@ -64,7 +67,7 @@ We can imagine an extension in which the trust put in a particular peer depends 
 
 However a visualization of the Web of Trust is given to the user (see Fig. \ref{fig:keyring_ex1}) (via the gui localhost:8080/keyring by default). This is to demonstrate the output of the AWOT system.
 
-\subsection{Reputation}
+\subsection{Reputation (Raja)}
 \label{sec:goals-funcs-rep}
 The goal of having a reputation system in our implementation of Peerster is to improve the efficiency and security of the network.
 Every peer A will compute a reputation for every other peer B based on three things:
@@ -158,6 +161,13 @@ Since our project will be written in go, we will use standard cryptographic libr
 \label{sec:web-of-trust-spec}
 We will implement the idea of \cite{haenni2007new}.
 
+\subsubsection{Key exchange}
+
+All peers are given fully trusted public keys from the users' input.
+These keys are then signed, and sent alongside the key itself as a special Rumor Message, so that any peer in the network will eventually receive it.
+
+Sometimes a signature can be received from an unknown peer, therefore the key cannot be verified. In this case, such received messages are stored and periodically checked until enough keys have been received.
+
 \subsubsection{Algorithm}
 \label{sec:wts-algo}
 In details, consider the network in Fig.\ref{fig:pgp-key-ring}. For validating the public key of K, we follow the steps : \\
@@ -166,9 +176,16 @@ In details, consider the network in Fig.\ref{fig:pgp-key-ring}. For validating t
 Here the shortest paths are $paths = \{(A,B,F,K), (A,B,G,K), (A,C,G,K)\}$\\
 
 2. Then compute the "probability" $p$ of the set of paths : \newline
-Define, for distinct peers $A_1,...,A_n$ and path $path = (A_1,...,A_n)$, $Pr(path) = \prod_{i = 1}^{n} Pr(A_i)$, i.e. the confidence on each peer is independent from the confidence on the other peers. \\
+Define, for distinct peers $A_1,...,A_n$ and path $path = (A_1,...,A_n)$, $Pr(path) = \prod_{i = 1}^{n} Pr(A_i)$, i.e. the confidence put on each peer is independent from the confidence put on any other peer. \\
 $Pr(paths)$ is computed using the inclusion exclusion formula over the shortest paths. \\\\
-Here $p = 0.581$ \\
+
+
+\begin{multline}
+Pr(paths) = Pr((A,B,F,K)) + Pr((A,B,G,K)) + Pr((A,C,G,K)) \\
+		    - Pr((A,B,F,K,G)) - Pr((A,B,F,K,C,G)) - Pr((A,B,G,K,C)) \\
+		    + Pr((A,B,F,K,G,C)) \\
+		  = 0.581
+\end{multline}
 
 3. If $p > \lambda$ accept the key, else reject it. \\\\
 Here, if $\lambda = 0.6$, reject the key : the certificate chain may be too long, or the confidence on the peers too low.\\
@@ -179,10 +196,7 @@ In short, the more shortest paths from source to the terminal and the lest hops 
 \subsubsection{Parameters}
 \label{sec:parameters}
 $\lambda$ is the acceptance threshold. We will fix it to 0 for simplicity, meaning that we prefer to use cryptography with uncertain peer rather than not communicating with it. \newline
-The 'probabilities' assigned to each peers are computed using the reputation system and the distance from the source in the graph. We will use $min(rep_A, \frac{1}{d})$ as the probability of $A$, where $rep_A$ is the current reputation of $A$ and $d$ is the distance from this peer in the key ring. This way we enforce the distance and the reputation to be acceptable.
-
-\subsubsection{Start}
-At first, a peer needs trusted peers to start collecting keys, this peers will be called "first introducers". They need to be given at startup, along with their public key (to effectively trust them).
+The 'probabilities' assigned to each peers are computed using the reputation system and the distance from the source in the graph. We will use $min(2 \times rep_A, \frac{1}{d})$ as the probability of $A$, where $rep_A$ is the current reputation of $A$ and $d$ is the distance from this peer in the key ring. This way we enforce the distance and the reputation to be acceptable.
 
 \subsection{Reputation}
 \label{sec:rep-spec}
@@ -226,10 +240,10 @@ Note that the value of $\alpha$ determines how much weight we give to the curren
 
 \section{Design and Architecture}
 
-Our project is built on the common Peerster, adding to it our modules. In particular the transfer of messages (broadcast and private) and file sharing are the most important features our system will use.
+Our project is built on the common Peerster, adding to it our modules. In particular the transfer of messages (broadcast and private) and file sharing are the most important features our system will use. We disabled nat traversal and file search functionnalities for simplicity.
 
 \subsection{Systems}
-Our system can be easily devided into two different but interconnected systems : the Reputation System (RS) and the Web of Trust system (AWOTS). \newline
+Our system can be divided into two different but interconnected systems : the Reputation System (RS) and the Automated Web of Trust system (AWOTS). \newline
 Figure \ref{fig:no-trust-arch} illustrates the overall structure of the system and the interactions between the two subsystems.
 
 \begin{figure}[h]
@@ -242,9 +256,9 @@ Figure \ref{fig:no-trust-arch} illustrates the overall structure of the system a
 \noindent
 Pierre will do the Automated Web of Trust System, and Raja will do the Reputation system.
 
-\subsubsection{Web of Trust System}
+\subsubsection{Automated Web of Trust System}
 This system will be responsible for updating a table in the Main System which will include $(id, k^{pub}_{id}, confidence_{id})$ for each known peer with identifier $id$, where $k^{pub}_{id}$ is the (trusted) public key of this peer, and $confidence_{id}$ is the confidence level put in the association $id \leftrightarrow k^{pub}_{id}$. \\
-This table will be used for getting the public keys of the different peers, and the confidence value will be used for the Reputation System. \\
+This table will be used for getting the public keys of the different peers, and the confidence values will be used for the Reputation System and cryptographic functions. \\
 
 At startup, trusted peers with their corresponding public keys will be given. Then each peer will start to sign its neighbors' public keys, and send the keys with signature to everyone in the network via rumor messages. \\
 When receiving a signature and a key, the AWOTS will update the key ring, and run the algorithm described in \ref{sec:wts-algo} if enough information. If the key is accepted, then the peer is added to the trusted peers, and then continue the process.
@@ -252,7 +266,7 @@ This steps will add more and more public keys to the table.
 
 Periodically the system will update the confidence levels in the table by running the same algorithm on the already acquired keys. \\
 
-Problems may arise, like collision of two different keys for the same peer (same identifier), in this case the system will pick the biggest subset of minimum paths to the identifier with the same key and "forget" the other paths (having different keys). Therefore for a key to be accepted, it has to be part of the maximum number of minimum paths.
+Problems may arise, like collision of two different keys for the same peer (same identifier), in this case the system will pick the biggest subset of minimum paths to the identifier with the same key and "forget" the other paths (having different keys). Therefore for a key to be accepted, it has to be part of the maximum number of minimum paths. A more detailed discussion is given in \ref{sec:example-collision}.
 
 \subsubsection{Reputation System}
 This system will be responsible for updating a separate table in the Main System which will include $(id, RS_n, RC_n)$ where $RS_n$ and $RC_n$ are the signature-based and contribution-based reputations respectively, as we saw in \ref{sec:rep-spec}.
@@ -295,6 +309,10 @@ We will verify correctness of the cryptographic functionnalities (confidentialit
 \subsection{Web of Trust}
 To measure the correctness and performance of our key distribution system (WTS), we will create a scenario with a network of Peerster nodes, and follow the updates of the key ring of each node, checking the time at which the ring stops updating, and checking the correctness of the ring. The state of the WTS system is the key ring, therefore checking the key ring is enough to evaluate the correctness of the system. The performance will be tested, but because of the nature of Peerster and the possibility of network bottlenecks, we will check that the key ring is complete after a reasonable amount of time. Moreover since the public keys are obtained via this system, testing in \ref{sec:crypt-test} will effectively test if the WTS works.
 
+Results
+
+On a local setup, with a network of seven nodes, convergence is attained in less than 10 seconds in mean. We think this is correct for our project, and in accordance with the tests we were given for the previous stages. Looking at the algorithm, the overhead may not scale well if the number of minimum paths becomes too large, but this is an optimization problem and not in the scope of our project.
+
 \subsection{Reputation}
 To evaluate the reputation system, we will follow a similar approach as for the rest of the system.
 We will run the system in a controlled environment where we send particular specific messages that we know should trigger certain changes in the reputation tables in order to check that these changes are actually happening.
@@ -308,6 +326,7 @@ Finally, we will make sure that a peer chooses in most cases its most reputable 
 \subsection{Automated Web Of Trust}
 
 \subsubsection{Example and Collisions of keys}
+\label{sec:example-collision}
 Collision of two different keys for the same peer (same identifier) is possible. In this case the system will pick the biggest subset of minimum paths to the identifier with the same key and "forget" the other paths (which have different keys). Therefore for a key to be accepted, it has to be part of the maximum number of minimum paths.
 
 \begin{exmp}
