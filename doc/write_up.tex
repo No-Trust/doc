@@ -28,20 +28,21 @@ The goal of our project is to extend Peerster's file sharing to include a reputa
 
 \subsection{Authenticity, Integrity, Confidentiality and Web-of-Trust}
 
-\subsubsection{Authenticity and Integrity in File Sharing}
+\subsubsection{Verifying the origin of a file - Pierre}
 \label{sec:goals-funcs-auth-integrity}
-One of the goal is to add a way to verify the origin of a file. That is if a peer A receives a file created by C from B, A can verify if the true origin is indeed C. If it is, then it can accept the file, and if not, decide to discard the file and decrease the reputation of the B (see \ref{sec:sig-based-rep}). \newline
+One of the goal is to add a way to verify the origin of a file. That is if a peer A receives a file created by C from the uploader B, A can verify if the true origin is indeed C. If it is, then it can accept the file, and if not, decide to discard the file and decrease the reputation of the uploader B (see \ref{sec:sig-based-rep}).
 
-In the user's perspective, the received files will only be origin validated files, so the user does not need to think if the file received has been modified from someone else than the origin. The verification process is not visible.
-Integrity will be implemented with authenticity.
+When requesting a download, the user will have to specify the origin of the file. Then the program will download it from the uploader (the destination of the file request) and if the uploader sends a correct file, it will accept it, otherwise drop it. \\
 
-\subsubsection{Confidentiality}
-In the user's perspective, this will allow the possibility to send encrypted private messages to a (single) known destination. Because the peerster network is open to eavesdroppers, this will offer confidentiality in one-to-one communication.
+In the mean time, any file transfer in the network between a downloader A and uploader B will be signed by B so that A can verify that there is no man-in-the-middle. In fact the downloader does not necessarily expect that it comes effectively from B, but when our system will update the reputation of B according to its upload to A, A will need to verify if the file is true to what B sent. 
 
-\subsubsection{Automated Web of Trust - AWOT} 
+\subsubsection{Confidentiality with Private Messages - Pierre}
+In the user's perspective, this will allow the possibility to send encrypted private messages to a (single) known destination. Because the peerster network is open to eavesdroppers, this will offer confidentiality of the content of a message in one-to-one communication. Similarly to a PGP encrypted email, only the content of the message will be encrypted.
+
+\subsubsection{Automated Web of Trust (AWOT) - Pierre} 
 The previous functionalities are implemented using public key cryptography. Usually the public keys are shared using a centralized PKI (Public Key Infrastructure), but our project will avoid this and implement a decentralized way to distribute public keys, based on the PGP "Web of Trust" model \cite{abdul1997pgp}.
 
-Once the public keys are obtained, the previous functionalities (CIA) are straightforward, therefore our project is focused on the Automated Web of Trust rather than the possibilities offered by it.
+Once the public keys are obtained, the previous functionalities (CIA) are straightforward, therefore our project is focused on the Automated Web of Trust rather than the possibilities offered by it, as they only serve as proofs of our working system.
 
 Our system will build a table of relation between peers and public key, and assign a trust level to each relation, representing the confidence that a particular public key belongs to a certain peer.
 
@@ -49,13 +50,15 @@ In summary our project also consist in a solution to the key validation and dist
 
 This enables all benefits from having public keys (e.g. authenticity, confidentiality...), while not relying on trusting a common authority. \\
 
-In the user's perspective, this way of sharing and collecting public keys will not be visible, for the sake of simplicity. However we can imagine an extension in which the trust put in a particular peer depends on the user decision (think how a close friend can be more trustworthy than others).
+The user of our system will have to bootstrap the program with trusted public keys he knows from other users of Peerster, this will be the only action performed by the user. The keyring will then automatically update itself and present a visualization.
+
+We can imagine an extension in which the trust put in a particular peer depends on the user decision (think how a close friend can be more trustworthy than others).
 
 
 \begin{figure}[h]
 	\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{keyring_example1}
 	\centering
-	\caption{Example of a Key Ring obtained with our implementation}
+	\caption{Example of a Key Ring obtained with our implementation, see Fig. \ref{fig:pgp-key-ring} for explanations}
 	\label{fig:keyring_ex1}
 \end{figure}
 
@@ -106,7 +109,7 @@ This is a common problem, and solved using cryptography. Since in peerster we do
 \subsubsection{Decentralized PKI}
 Decentralized PKIs already exist, and the main goal for them is to redistribute the roles of the certificate authorities in the common centralized PKI approach, and usually this mean not storing all public keys at the same place, and trusting the system. KeyChains \cite{morselli2006keychains} and \cite{aberer2005decentralised} are models for a decentralized PKI, the database of public keys are distributed which implies that a peer does not have every public keys, and that the retrieving of keys need more time than storing all keys in each system.
 
-Implementing this in Peerster does not seem necessary, since every peer eventually save the entire set of active peers in the network (due to the specification). Our approach is to collect and save public keys for peers for each peerster client (total decentralization). Therefore this solution will save time for public key lookup (no decentralized database), at the cost of storage and local computations.
+Implementing this in Peerster does not seem necessary, since every peer eventually save the entire set of active peers in the network (due to the specification). Our approach is to collect and save public keys for peers for each peerster client (total decentralization). Therefore this solution will save time for public key lookup (no decentralized database), at the cost of storage and network-redundant computations.
 
 \subsubsection{Automated Web of Trust - AWOT}
 \label{sec:related-work-wot}
@@ -175,7 +178,7 @@ In short, the more shortest paths from source to the terminal and the lest hops 
 
 \subsubsection{Parameters}
 \label{sec:parameters}
-$\lambda$ is the acceptance threshold. We will fix it for simplicity. \newline
+$\lambda$ is the acceptance threshold. We will fix it to 0 for simplicity, meaning that we prefer to use cryptography with uncertain peer rather than not communicating with it. \newline
 The 'probabilities' assigned to each peers are computed using the reputation system and the distance from the source in the graph. We will use $min(rep_A, \frac{1}{d})$ as the probability of $A$, where $rep_A$ is the current reputation of $A$ and $d$ is the distance from this peer in the key ring. This way we enforce the distance and the reputation to be acceptable.
 
 \subsubsection{Start}
@@ -244,7 +247,7 @@ This system will be responsible for updating a table in the Main System which wi
 This table will be used for getting the public keys of the different peers, and the confidence value will be used for the Reputation System. \\
 
 At startup, trusted peers with their corresponding public keys will be given. Then each peer will start to sign its neighbors' public keys, and send the keys with signature to everyone in the network via rumor messages. \\
-When receiving a signature and a key, the AWOTS will update the key ring, and run the algorithm described in \ref{sec:wts-algo}. If the key is accepted, then the peer is added to the trusted peers, and then continue the process.
+When receiving a signature and a key, the AWOTS will update the key ring, and run the algorithm described in \ref{sec:wts-algo} if enough information. If the key is accepted, then the peer is added to the trusted peers, and then continue the process.
 This steps will add more and more public keys to the table. 
 
 Periodically the system will update the confidence levels in the table by running the same algorithm on the already acquired keys. \\
@@ -266,7 +269,7 @@ We will add features like confidentiality, integrity and authenticity to the mes
 
 As discussed earlier, the reputation table will be used to choose a peer to interact with, for example when a peer wants to ask for the public key of another peer, or when it wants to send a status packet to update its rumors.
 \\
-Highly reputable peers will be chosen with a very hight probablity. For instance, assuming the table is sorted somehow based on the reputation values, we might select a peer from the upper half of the table with probability $0.9$ and from the lower half with probability $0.1$, and recursively select a half with probabilities that are more and more balanced with every iteration.
+Highly reputable peers will be chosen with a very high probablity. For instance, assuming the table is sorted somehow based on the reputation values, we might select a peer from the upper half of the table with probability $0.9$ and from the lower half with probability $0.1$, and recursively select a half with probabilities that are more and more balanced with every iteration.
 This will occasionally give low reputable peers a chance to make a "come back" and contribute in the system.
 
 \subsection{Systems interoperability}
