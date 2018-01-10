@@ -86,6 +86,9 @@ Every time A receives signed data originating from C delivered by B (note that B
 \\\\
 If the data turns out to be authentic, then A will increase B's reputation, otherwise A will decrease it.
 The amount by which A modifies B's reputation depends on the confidence level of C's public key that A holds, i.e. the degree to which we are confident that the public key we think is that of C is indeed that of C (see \ref{sec:related-work-wot}).
+\\\\
+In our implementation, we only update the signature-based reputation of a peer when checking signatures of file chunks.
+It would have been possible to extend this to checking signatures of public key exchanges, but it was difficult to do for technical reasons specific to our implementation.
 
 \subsubsection{Contribution-Based Reputation}
 This type of reputation represents how much data B has delivered to A, relative to the total amount of data exchanged between the two.
@@ -98,7 +101,7 @@ This means that in a situation where both peers send data to each other in equal
 Having reputations of other peers will mainly serve two purposes.
 The first is related to choosing a confidence value for a public key association (see \ref{sec:design-arch-interop-rs-wts}).
 The second, which affects more directly a peer's interaction with other peer's, is for choosing which peers to communicate with:
-A peer with a high reputation is one that we know (at least recently) has sends us authentic data regularly, and so it makes sense to prefer it over less reputable peer.
+A peer with a high reputation is one that we know (at least recently) has been sending us authentic data regularly, and so it makes sense to prefer it over less reputable peer.
 That is after all the main purpose of having a reputations system.
 Other peers however may still be selected with low probabilities in order to "give other peers a chance" to increase their reputation and become more active.
 
@@ -367,7 +370,11 @@ Collision of two different keys for the same peer (same identifier) is possible.
 
 \end{exmp}
 
-
+\subsection{Reputation System}
+  The behavior of contribution-based reputations seems a little bit undeterministic in some cases and does not always react the way we expect it to.
+  \\
+  For instance, if we send a lot of successive rumors from one peer, we might think that its contribution-based reputation will increase dramatically in all peers directly connected to that peer.
+  However, that does not seem to be the case, and we can observe that all reputations drop at that point.
 
 
 \bibliography{references}{}
